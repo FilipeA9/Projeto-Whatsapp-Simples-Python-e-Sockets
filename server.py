@@ -1,82 +1,64 @@
-# servidor_simples.py
 import socket
 import threading
-import signal
-import sys
 
-MSG_BAD = (
-    b"HTTP/1.0 400 Bad Request\r\n"
-    b"Content-Type: text/plain; charset=utf-8\r\n"
-    b"Content-Length: 12\r\n"
-    b"\r\n"
-    b"Bad Request"
-)
+# Configurações do servidor
+HOST = "10.179.238.41"  # Endereço IP do servidor
+PORT = 8080        # Porta que o servidor vai escutar
 
-def resposta_ok(corpo: str) -> bytes:
-    body = corpo.encode("utf-8")
-    headers = (
-        "HTTP/1.0 200 OK\r\n"
-        "Content-Type: text/plain; charset=utf-8\r\n"
-        f"Content-Length: {len(body)}\r\n"
-        "\r\n"
-    ).encode("utf-8")
-    return headers + body
+# Lista global para armazenar os endereços dos clientes conectados
+clientes_conectados = []
+clientes_lock = threading.Lock()  # Lock para evitar condições de corrida
 
-stop_event = threading.Event()
-
-def tratar_cliente(conn: socket.socket, addr):
-    # Cada cliente roda em uma thread
-    with conn:
-        conn.settimeout(15)
-        f = conn.makefile("rb", buffering=0)
-        try:
-            # Lê a primeira linha (request-line ou mensagem)
-            primeira_linha = f.readline(4096)
-            if not primeira_linha or not primeira_linha.strip():
-                conn.sendall(MSG_BAD)
-                return
-
-            # Se vier algo com jeito de HTTP, consome cabeçalhos até linha vazia
+def handle_client(conn, addr):
+    global clientes_conectados
+    print(f"Conectado por {addr} \n")
+    # Envia uma mensagem de boas-vindas ao cliente
+    conn.sendall(b'Conexao estabelecida com o servidor. \n')
+    
+    # Adiciona o cliente à lista de conectados
+    with clientes_lock:
+        clientes_conectados.append(addr[0])
+    
+    try:
+        with conn:
+               
             while True:
-                linha = f.readline(4096)
-                if not linha or linha in (b"\r\n", b"\n"):
+                # Recebe dados do cliente
+                data = conn.recv(1024)
+                if not data:
                     break
+                
+                # Mostra os IPs dos outros clientes conectados
+                with clientes_lock:
+                    outros_clientes = [ip for ip in clientes_conectados]
+                
+                if outros_clientes:
+                    mensagem = f"Outros clientes conectados: {', '.join(outros_clientes)}"
+                else:
+                    mensagem = "Voce e o unico cliente conectado no momento."
+                
+                # Envia a mensagem de volta ao cliente
+                conn.sendall(mensagem.encode())
 
-            texto = primeira_linha.decode("utf-8", errors="ignore").strip()
-            corpo = (
-                f"Olá {addr[0]}:{addr[1]}!\n"
-                f"Você enviou: {texto}\n"
-                "ServidorSimples (Python) está funcionando.\n"
-            )
-            conn.sendall(resposta_ok(corpo))
-        except socket.timeout:
-            # Se o cliente não envia nada a tempo, responde 400
-            try:
-                conn.sendall(MSG_BAD)
-            except Exception:
-                pass
+    finally:
+        # Remove o cliente da lista ao desconectar
+        with clientes_lock:
+            clientes_conectados.remove(addr[0])
+        print(f"Conexão encerrada com {addr}")
 
-def main(host="0.0.0.0", port=8080, backlog=100):
-    # Permite CTRL+C encerrar graciosamente
-    def handle_sigint(sig, frame):
-        stop_event.set()
-        print("\nEncerrando servidor...")
-        sys.exit(0)
-    signal.signal(signal.SIGINT, handle_sigint)
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind((host, port))
-        srv.listen(backlog)
-        print(f"Servidor escutando em {host}:{port} (CTRL+C para sair)")
-
-        while not stop_event.is_set():
-            try:
-                conn, addr = srv.accept()
-            except OSError:
-                break
-            t = threading.Thread(target=tratar_cliente, args=(conn, addr), daemon=True)
-            t.start()
-
-if __name__ == "__main__":
-    main()  # porta 8080 por padrão (evita necessidade de privilégio de root)
+# Cria um socket TCP/IP
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    # Vincula o socket ao endereço e porta
+    s.bind((HOST, PORT))
+    # Começa a escutar por conexões
+    s.listen()
+    print(f"Servidor escutando em {HOST}:{PORT}")
+    
+    while True:
+        # Aceita conexões
+        conn, addr = s.accept()
+        print(f"Nova conexão de {addr}")
+        # Cria uma nova thread para lidar com o cliente
+        client_thread = threading.Thread(target=handle_client, args=(conn, addr))
+        client_thread.start()
