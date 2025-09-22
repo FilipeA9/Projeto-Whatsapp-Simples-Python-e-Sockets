@@ -1,3 +1,5 @@
+# Para rodas a aplicação:
 
-# Para rodar o client:
- python cliente_simples.py localhost "Ola servidor!" 8080
+1 - Execute o arquivo servidor com o comando : python servidor.py
+
+2 - Execute o cliente com o comando: python cliente_app.py
