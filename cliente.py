@@ -123,7 +123,8 @@ class Cliente:
                 print(f"Mensagem recebida de {addr}: {mensagem}")
 
                 # dentro de Cliente._handle_incoming (após criar 'mensagem')
-                salvar_arquivo_recebido(mensagem)
+                if mensagem.tipo == "arquivo":
+                    salvar_arquivo_recebido(mensagem)
 
                 if mensagem.remetente not in [conversa.id for conversa in historico_msgs]:
                     nova_conversa = models_app.Conversa(id_conversa=mensagem.remetente, mensagens=[mensagem], participantes=[mensagem.remetente, mensagem.destino])
