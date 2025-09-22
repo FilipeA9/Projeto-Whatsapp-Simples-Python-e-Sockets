@@ -75,7 +75,7 @@ def salvar_arquivo_recebido(mensagem: models_app.Mensagem):
 
             tamanho = info.get("size") or len(data)
             mimetype = info.get("mimetype", "application/octet-stream")
-            print(f"Arquivo recebido e salvo: {destino} ({mimetype}, {tamanho} bytes)")
+            print(f"\nArquivo recebido e salvo: {destino} ({mimetype}, {tamanho} bytes)")
         else:
             return
 
@@ -121,8 +121,12 @@ class Cliente:
                     tipo=data.get('tipo'), 
                     datetime_envio=data.get('datetime'),
                     conteudo=data.get('conteudo') )
-
-                print(f"\nMensagem recebida de {addr}: {mensagem.conteudo}")
+                
+                if (mensagem.tipo == 'texto'):
+                    print(f"\nMensagem recebida de {mensagem.remetente}: {mensagem.conteudo}")
+                # else:
+                #     print(f"\nArquivo recebido de {mensagem.remetente}")
+                
 
                 # dentro de Cliente._handle_incoming (após criar 'mensagem')
                 if mensagem.tipo == "arquivo":
@@ -318,7 +322,7 @@ class Cliente:
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
 
-        grupo = models_app.Grupo(id_grupo=None, nome=nome_grupo, participantes=participantes)
+        grupo = models_app.Grupo(id_grupo=nome_grupo, nome=nome_grupo, participantes=participantes)
         comando = models_app.Comando(tipo=8, objeto=grupo)  # tipo 8 para criar grupo
 
         #cliente.sendall(comando.to_json().encode())
