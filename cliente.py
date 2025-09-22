@@ -47,7 +47,7 @@ def _recv_msg(conn):
     # agora lê exatamente total bytes
     return _recv_exact(conn, total)
 
-def salvar_arquivo_recebido(self, mensagem: models_app.Mensagem):
+def salvar_arquivo_recebido(mensagem: models_app.Mensagem):
         if mensagem.tipo == "arquivo" and isinstance(mensagem.conteudo, dict):
             info = mensagem.conteudo
 
@@ -76,6 +76,8 @@ def salvar_arquivo_recebido(self, mensagem: models_app.Mensagem):
             tamanho = info.get("size") or len(data)
             mimetype = info.get("mimetype", "application/octet-stream")
             print(f"Arquivo recebido e salvo: {destino} ({mimetype}, {tamanho} bytes)")
+        else:
+            return
 
 
 # Cliente que se conecta ao servidor e envia comandos
@@ -120,7 +122,7 @@ class Cliente:
                     datetime_envio=data.get('datetime'),
                     conteudo=data.get('conteudo') )
 
-                print(f"Mensagem recebida de {addr}: {mensagem}")
+                print(f"\nMensagem recebida de {addr}: {mensagem.conteudo}")
 
                 # dentro de Cliente._handle_incoming (após criar 'mensagem')
                 if mensagem.tipo == "arquivo":
