@@ -250,6 +250,8 @@ class Cliente:
     
     # método para adicionar contato, recebe o login do usuário, nome do contato e login do dono do contato
     def adicionar_contato(self, contato_login, contato_nome, contato_dono):
+        if contato_login == contato_dono:
+            return "Erro: Não é possível adicionar você mesmo como contato."
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
 

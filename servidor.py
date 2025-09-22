@@ -318,6 +318,8 @@ COMMAND_HANDLERS = {
     5: listar_contatos,
     6: listar_todos_usuarios,
     7: logout_cliente,
+    8: criar_grupo,
+    9: enviar_mensagem_grupo
 }
 
 # Cria um socket TCP/IP
