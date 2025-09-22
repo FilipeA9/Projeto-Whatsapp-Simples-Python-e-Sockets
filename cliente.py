@@ -6,7 +6,8 @@ import models_app
 
 historico_msgs = []  # lista de objetos Conversa
 
-
+# Função auxiliar para ler um arquivo e retornar um dicionário com os dados necessários
+# ajuda na hora de enviar arquivos
 def _file_to_payload(path: str) -> dict:
         with open(path, 'rb') as f:
             raw = f.read()
@@ -21,9 +22,10 @@ def _file_to_payload(path: str) -> dict:
             "data_base64": b64,
         }
 
-
+# Cliente que se conecta ao servidor e envia comandos
 class Cliente:
 
+    # inicializa o cliente, conecta ao servidor e inicia a thread de escuta
     def __init__(self, server='localhost', port=8080):
        
        self.socket_cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -40,11 +42,14 @@ class Cliente:
        t = threading.Thread(target=self._accept_loop, daemon=True)
        t.start()
     
+    # thread que aceita conexões de entrada e cria handlers
     def _accept_loop(self):
         while True:
             conn, addr = self.socket_cliente.accept()
             threading.Thread(target=self._handle_incoming, args=(conn, addr), daemon=True).start()
 
+    # thread que lida com uma conexão de entrada
+    # recebe a mensagem, decodifica e adiciona ao histórico
     def _handle_incoming(self, conn, addr):
         with conn:
             data = conn.recv(4096)
@@ -80,7 +85,13 @@ class Cliente:
                             conversa.mensagens.append(mensagem)
                             break
                 
+# métodos para enviar comandos ao servidor 
+# cada método cria o comando, conecta ao servidor, envia o comando e espera a resposta
+# depois fecha a conexão e retorna a resposta
 
+    # método de login, recebe login e senha e envia ao servidor
+    # envia o IP e porta do cliente para que o servidor possa se conectar
+    # assim o cliente pode receber mensagens indenpendente do ip/porta do servidor                      
     def login(self,login, senha,):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
@@ -96,6 +107,8 @@ class Cliente:
         cliente.close()
         return resposta
     
+    # método de logout, recebe o login do usuário e envia ao servidor
+    # o servidor coloca o status do usuário como offline
     def logout(self, login):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
@@ -111,7 +124,8 @@ class Cliente:
         cliente.close()
         return resposta
     
-
+# método de registro, recebe nome, login e senha e envia ao servidor
+# o servidor cria o usuário e retorna uma mensagem de sucesso ou erro
     def registrar(self, nome, login, senha):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
@@ -127,6 +141,7 @@ class Cliente:
         cliente.close()
         return resposta
 
+    # método para enviar mensagem, recebe remetente, destino, conteudo e tipo (texto ou arquivo)
     def enviar_mensagem(self, remetente, destino, conteudo, tipo='texto'):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
@@ -142,6 +157,7 @@ class Cliente:
         cliente.close()
         return resposta
     
+    # método para enviar mensagem para um grupo, recebe remetente, id do grupo, conteudo e tipo (texto ou arquivo)
     def enviar_mensagem_grupo(self, remetente, grupo_id, conteudo, tipo='texto'):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
@@ -157,6 +173,7 @@ class Cliente:
         cliente.close()
         return resposta
     
+    # método para adicionar contato, recebe o login do usuário, nome do contato e login do dono do contato
     def adicionar_contato(self, contato_login, contato_nome, contato_dono):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
@@ -172,6 +189,8 @@ class Cliente:
         cliente.close()
         return resposta
 
+    # método para listar contatos, recebe o login do usuário e envia ao servidor
+    # o servidor retorna a lista de contatos do usuário
     def listar_contatos(self, login):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
@@ -187,6 +206,8 @@ class Cliente:
         cliente.close()
         return resposta
     
+    # método para listar todos os usuários, envia ao servidor
+    # o servidor retorna a lista de todos os usuários cadastrados
     def listar_todos_usuarios(self):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
@@ -207,6 +228,7 @@ class Cliente:
                 return conversa.mensagens
         return []'''
     
+    # método auxiliar para formatar o tamanho do arquivo
     def _human_size(self, n: int) -> str:
         # opcional: deixa o tamanho mais amigável (KB/MB)
         for unit in ("B", "KB", "MB", "GB"):
@@ -215,7 +237,8 @@ class Cliente:
             n /= 1024
         return f"{n:.2f} TB"
     
-
+    # método para listar mensagens de uma conversa, recebe o id da conversa (login do usuário ou id do grupo)
+    # procura a conversa no histórico e imprime as mensagens formatadas
     def listar_mensagens(self, conversa_id):
         for conversa in historico_msgs:
             if conversa.id == conversa_id:
@@ -245,7 +268,7 @@ class Cliente:
 
 
 
-    
+    # método para criar grupo, recebe nome do grupo e lista de participantes (logins)
     def criar_grupo(self, nome_grupo, participantes):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
@@ -261,6 +284,8 @@ class Cliente:
         cliente.close()
         return resposta
     
+    # método para listar grupos, recebe o login do usuário e envia ao servidor
+    # o servidor retorna a lista de grupos do usuário
     def listar_grupos(self, login):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))
@@ -276,7 +301,7 @@ class Cliente:
         cliente.close()
         return resposta
 
-
+    # método para enviar arquivo, recebe remetente, destino e caminho do arquivo
     def enviar_arquivo(self, remetente: str, destino: str, caminho_arquivo: str):
         cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente.connect((self.server, self.port))

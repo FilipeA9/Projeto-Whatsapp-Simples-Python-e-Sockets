@@ -1,6 +1,13 @@
 import json
 from datetime import datetime
 
+# Definição das classes de modelo
+# Cada classe possui um método to_dict para facilitar a conversão para JSON
+# e um método to_json que utiliza o to_dict para retornar a representação JSON da instância
+
+
+
+# Modelo de dados para um contato, os contatos ficam salvos na lista de contatos do usuário
 class Contato:
     def __init__(self, nome, id_usuario, contato_dono):
         self.nome = nome
@@ -17,7 +24,7 @@ class Contato:
     def to_json(self):
         return json.dumps(self.to_dict())
 
-
+# Modelo de dados para um usuário, o login do usuário é único
 class Usuario:
     def __init__(self, nome, login, senha, ip, porta, conversas=None, contatos=None, status='offline'):
         self.nome = nome
@@ -43,7 +50,7 @@ class Usuario:
     def to_json(self):
         return json.dumps(self.to_dict())
 
-
+# Modelo de dados para um grupo de usuários, o id do grupo é gerado pelo servidor
 class Grupo:
     def __init__(self, id_grupo, nome, participantes=None, conversa_id=None):
         self.id = id_grupo
@@ -85,7 +92,8 @@ class Mensagem:
     def to_json(self):
         return json.dumps(self.to_dict())
 
-
+# Modelo de dados para uma conversa, pode ser entre dois usuários ou um grupo, a conversa é identificada pelo login do usuário ou id do grupo
+# As mensagens ficam salvas na lista de mensagens da conversa
 class Conversa:
     def __init__(self, id_conversa, mensagens=None, participantes=None):
         self.id = id_conversa # login do usuario ou id do grupo
@@ -102,6 +110,9 @@ class Conversa:
     def to_json(self):
         return json.dumps(self.to_dict())
 
+# Modelo de dados para um comando, o comando é enviado do cliente para o servidor ou do servidor para o cliente
+# O tipo do comando é um inteiro que representa a ação a ser realizada
+# O objeto pode ser uma lista de usuários, um usuário, uma mensagem etc. É o objeto que o comando irá manipular
 
 class Comando:
     def __init__(self, tipo, objeto):
