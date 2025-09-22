@@ -1,7 +1,10 @@
 import socket
 import threading
 import json
-import base64, mimetypes, os, hashlib
+import mimetypes, os, hashlib
+import re
+from pathlib import Path
+from base64 import b64decode, b64encode
 import models_app
 
 historico_msgs = []  # lista de objetos Conversa
@@ -11,7 +14,7 @@ historico_msgs = []  # lista de objetos Conversa
 def _file_to_payload(path: str) -> dict:
         with open(path, 'rb') as f:
             raw = f.read()
-        b64 = base64.b64encode(raw).decode('ascii')
+        b64 = b64encode(raw).decode('ascii')
         mime, _ = mimetypes.guess_type(path)
         sha256 = hashlib.sha256(raw).hexdigest()
         print(f"Arquivo lido: {path}, tamanho: {len(raw)} bytes, sha256: {sha256}")
@@ -43,6 +46,36 @@ def _recv_msg(conn):
     total = int.from_bytes(header, 'big')
     # agora lê exatamente total bytes
     return _recv_exact(conn, total)
+
+def salvar_arquivo_recebido(self, mensagem: models_app.Mensagem):
+        if mensagem.tipo == "arquivo" and isinstance(mensagem.conteudo, dict):
+            info = mensagem.conteudo
+
+            # 1) Nome da pasta: "<login_remetente>_arquivos" em C:\
+            pasta_base = Path(r"C:\{}".format(f"{mensagem.remetente}_arquivos"))
+            pasta_base.mkdir(parents=True, exist_ok=True)
+
+            # 2) Sanitizar nome do arquivo (Windows não aceita \ / : * ? " < > |)
+            filename = info.get("filename", "arquivo.bin")
+            filename = re.sub(r'[\\/:*?"<>|]', "_", filename)
+
+            # 3) Caminho final
+            destino = pasta_base / filename
+
+            # (Opcional) Evitar sobrescrever: cria "nome (1).ext", "nome (2).ext", ...
+            i, original = 1, destino
+            while destino.exists():
+                destino = original.with_name(f"{original.stem} ({i}){original.suffix}")
+                i += 1
+
+            # 4) Salvar
+            data = b64decode(info["data_base64"])
+            with open(destino, "wb") as f:
+                f.write(data)
+
+            tamanho = info.get("size") or len(data)
+            mimetype = info.get("mimetype", "application/octet-stream")
+            print(f"Arquivo recebido e salvo: {destino} ({mimetype}, {tamanho} bytes)")
 
 
 # Cliente que se conecta ao servidor e envia comandos
@@ -90,14 +123,7 @@ class Cliente:
                 print(f"Mensagem recebida de {addr}: {mensagem}")
 
                 # dentro de Cliente._handle_incoming (após criar 'mensagem')
-                if mensagem.tipo == "arquivo" and isinstance(mensagem.conteudo, dict):
-                    from base64 import b64decode
-                    info = mensagem.conteudo
-                    data = b64decode(info["data_base64"])
-                    with open(info["filename"], "wb") as f:
-                        f.write(data)
-                    print(f"Arquivo recebido e salvo: {info['filename']} ({info.get('mimetype')}, {info.get('size')} bytes)")
-
+                salvar_arquivo_recebido(mensagem)
 
                 if mensagem.remetente not in [conversa.id for conversa in historico_msgs]:
                     nova_conversa = models_app.Conversa(id_conversa=mensagem.remetente, mensagens=[mensagem], participantes=[mensagem.remetente, mensagem.destino])
@@ -332,3 +358,6 @@ class Cliente:
         print("Resposta do servidor:", resposta)
         cliente.close()
         return resposta
+
+
+                 
