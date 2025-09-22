@@ -11,6 +11,26 @@ PORT = 8080        # Porta que o servidor vai escutar
 clientes_cadastrados = []
 grupos_cadastrados = []
 
+def _recv_exact(conn, n):
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = conn.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("socket fechado antes de receber tudo")
+        buf.extend(chunk)
+    return bytes(buf)
+
+def _recv_msg(conn):
+    # 8 bytes com o tamanho
+    header = _recv_exact(conn, 8)
+    total = int.from_bytes(header, 'big')
+    # agora lê exatamente total bytes
+    return _recv_exact(conn, total)
+
+def _send_with_len(sock, data_bytes: bytes):
+    size = len(data_bytes).to_bytes(8, 'big')
+    sock.sendall(size)
+    sock.sendall(data_bytes)
 
 def handle_client(conn, addr):
     """
@@ -24,7 +44,7 @@ def handle_client(conn, addr):
     print("inicio do handle_client", addr)
     try:
         with conn:
-            raw = conn.recv(8192)
+            raw = _recv_msg(conn)
             if not raw:
                 return
 
@@ -172,7 +192,8 @@ def enviar_mensagem_handler(conn, addr, dados_msg):
          
         conexao_destino = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         conexao_destino.connect((destinatario.ip, destinatario.porta))
-        conexao_destino.sendall(mensagem.to_json().encode())
+        #conexao_destino.sendall(mensagem.to_json().encode())
+        _send_with_len(conexao_destino, mensagem.to_json().encode())
         conexao_destino.close()
 
         # Aqui você pode implementar a lógica para encaminhar a mensagem ao destinatário
@@ -212,7 +233,8 @@ def enviar_mensagem_grupo(conn, addr, dados_msg):
                 if cliente.login == participante_login and cliente.status == 'online' and cliente.login != mensagem.remetente:
                     conexao_destino = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     conexao_destino.connect((cliente.ip, cliente.porta))
-                    conexao_destino.sendall(mensagem.to_json().encode())
+                    #conexao_destino.sendall(mensagem.to_json().encode())
+                    _send_with_len(conexao_destino, mensagem.to_json().encode())
                     conexao_destino.close()
 
         return {'status': 'success', 'message': 'Mensagem de grupo enviada'}

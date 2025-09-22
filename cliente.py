@@ -14,6 +14,7 @@ def _file_to_payload(path: str) -> dict:
         b64 = base64.b64encode(raw).decode('ascii')
         mime, _ = mimetypes.guess_type(path)
         sha256 = hashlib.sha256(raw).hexdigest()
+        print(f"Arquivo lido: {path}, tamanho: {len(raw)} bytes, sha256: {sha256}")
         return {
             "filename": os.path.basename(path),
             "mimetype": mime or "application/octet-stream",
@@ -21,6 +22,28 @@ def _file_to_payload(path: str) -> dict:
             "sha256": sha256,
             "data_base64": b64,
         }
+
+def _send_with_len(sock, data_bytes: bytes):
+    size = len(data_bytes).to_bytes(8, 'big')
+    sock.sendall(size)
+    sock.sendall(data_bytes)
+
+def _recv_exact(conn, n):
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = conn.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("socket fechado antes de receber tudo")
+        buf.extend(chunk)
+    return bytes(buf)
+
+def _recv_msg(conn):
+    # 8 bytes com o tamanho
+    header = _recv_exact(conn, 8)
+    total = int.from_bytes(header, 'big')
+    # agora lê exatamente total bytes
+    return _recv_exact(conn, total)
+
 
 # Cliente que se conecta ao servidor e envia comandos
 class Cliente:
@@ -52,7 +75,7 @@ class Cliente:
     # recebe a mensagem, decodifica e adiciona ao histórico
     def _handle_incoming(self, conn, addr):
         with conn:
-            data = conn.recv(4096)
+            data = _recv_msg(conn)
             if data:
                 
                 data = json.loads(data.decode())
@@ -99,7 +122,8 @@ class Cliente:
         usuario = models_app.Usuario( nome=None, login=login, senha=senha, ip=self.listen_ip, porta=self.listen_port)
         comando = models_app.Comando(tipo=2, objeto = usuario) # tipo 2 para login
           
-        cliente.sendall(comando.to_json().encode())
+        #cliente.sendall(comando.to_json().encode())
+        _send_with_len(cliente, comando.to_json().encode())
         
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
@@ -116,7 +140,8 @@ class Cliente:
         usuario = models_app.Usuario( nome=None, login=login, senha=None, ip=None, porta=None)
         comando = models_app.Comando(tipo=7, objeto = usuario) # tipo 7 para logout
           
-        cliente.sendall(comando.to_json().encode())
+        #cliente.sendall(comando.to_json().encode())
+        _send_with_len(cliente, comando.to_json().encode())
         
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
@@ -133,7 +158,8 @@ class Cliente:
         usuario = models_app.Usuario(nome=nome, login=login, senha=senha, ip=self.listen_ip, porta=self.listen_port)
         comando = models_app.Comando(tipo=1, objeto = usuario) # tipo 1 para registro
 
-        cliente.sendall(comando.to_json().encode())
+        #cliente.sendall(comando.to_json().encode())
+        _send_with_len(cliente, comando.to_json().encode())
 
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
@@ -149,10 +175,32 @@ class Cliente:
         mensagem = models_app.Mensagem(remetente = remetente, destino=destino, tipo=tipo, conteudo=conteudo)
         comando = models_app.Comando(tipo=3, objeto=mensagem)  # tipo 3 para enviar mensagem
 
-        cliente.sendall(comando.to_json().encode())
+        #cliente.sendall(comando.to_json().encode())
+        _send_with_len(cliente, comando.to_json().encode())
 
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
+
+        status_ok = False
+        try:
+            resp = json.loads(resposta)
+            status_ok = (resp.get('status') == 'success')
+        except Exception:
+            # não era JSON, deixa como string mesmo
+            print("Resposta do servidor não é JSON:", resposta)
+
+        if status_ok:
+            # adiciona a mensagem ao histórico local se o envio foi bem-sucedido
+            if destino not in [conversa.id for conversa in historico_msgs]:
+                nova_conversa = models_app.Conversa(id_conversa=destino, mensagens=[mensagem], participantes=[remetente, destino])
+                historico_msgs.append(nova_conversa)
+                print("Nova conversa criada no histórico.")
+            else:
+                for conversa in historico_msgs:
+                    if conversa.id == destino:
+                        conversa.mensagens.append(mensagem)
+                        print("Mensagem adicionada ao histórico existente.")
+                        break
 
         cliente.close()
         return resposta
@@ -165,7 +213,8 @@ class Cliente:
         mensagem = models_app.Mensagem(remetente = remetente, destino=grupo_id, tipo=tipo, conteudo=conteudo, grupo=True)
         comando = models_app.Comando(tipo=10, objeto=mensagem)  # tipo 10 para enviar mensagem para grupo
 
-        cliente.sendall(comando.to_json().encode())
+        #cliente.sendall(comando.to_json().encode())
+        _send_with_len(cliente, comando.to_json().encode())
 
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
@@ -181,7 +230,8 @@ class Cliente:
         contato = models_app.Contato(nome=contato_nome, id_usuario=contato_login, contato_dono=contato_dono)
         comando = models_app.Comando(tipo=4, objeto=contato)  # tipo 4 para adicionar contato
 
-        cliente.sendall(comando.to_json().encode())
+        #cliente.sendall(comando.to_json().encode())
+        _send_with_len(cliente, comando.to_json().encode())
 
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
@@ -198,7 +248,8 @@ class Cliente:
         usuario = models_app.Usuario(nome=None, login=login, senha=None, ip=None, porta=None)
         comando = models_app.Comando(tipo=5, objeto=usuario)  # tipo 5 para listar contatos
 
-        cliente.sendall(comando.to_json().encode())
+        #cliente.sendall(comando.to_json().encode())
+        _send_with_len(cliente, comando.to_json().encode())
 
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
@@ -214,7 +265,8 @@ class Cliente:
 
         comando = models_app.Comando(tipo=6, objeto=None)  # tipo 6 para listar todos os usuários
 
-        cliente.sendall(comando.to_json().encode())
+        #cliente.sendall(comando.to_json().encode())
+        _send_with_len(cliente, comando.to_json().encode())
 
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
@@ -222,48 +274,10 @@ class Cliente:
         cliente.close()
         return resposta
     
-    '''def listar_mensagens(self, conversa_id):
-        for conversa in historico_msgs:
-            if conversa.id == conversa_id:
-                return conversa.mensagens
-        return []'''
-    
-    # método auxiliar para formatar o tamanho do arquivo
-    def _human_size(self, n: int) -> str:
-        # opcional: deixa o tamanho mais amigável (KB/MB)
-        for unit in ("B", "KB", "MB", "GB"):
-            if n < 1024:
-                return f"{n:.0f} {unit}" if unit == "B" else f"{n:.2f} {unit}"
-            n /= 1024
-        return f"{n:.2f} TB"
-    
-    # método para listar mensagens de uma conversa, recebe o id da conversa (login do usuário ou id do grupo)
-    # procura a conversa no histórico e imprime as mensagens formatadas
     def listar_mensagens(self, conversa_id):
         for conversa in historico_msgs:
             if conversa.id == conversa_id:
-                mensagens = conversa.mensagens
-                if not mensagens:
-                    print("— sem mensagens —")
-                    return []
-
-                for m in mensagens:
-                    # tenta usar datetime se existir (ajuste se seu atributo tiver outro nome)
-                    ts = getattr(m, "datetime", "") or getattr(m, "datetime_envio", "")
-                    cab = f"[{ts}] {m.remetente} -> {m.destino}: "
-
-                    if m.tipo == "arquivo" and isinstance(m.conteudo, dict):
-                        filename = m.conteudo.get("filename", "arquivo")
-                        size = m.conteudo.get("size")
-                        # mostre em KB/MB se quiser, senão use f"{size} bytes"
-                        size_str = self._human_size(size) if isinstance(size, int) else "tamanho desconhecido"
-                        print(cab + f"{filename} {size_str}")
-                    else:
-                        print(cab + str(m.conteudo))
-
-                return mensagens
-
-        print("— conversa não encontrada —")
+                return conversa.mensagens
         return []
 
 
@@ -276,7 +290,8 @@ class Cliente:
         grupo = models_app.Grupo(id_grupo=None, nome=nome_grupo, participantes=participantes)
         comando = models_app.Comando(tipo=8, objeto=grupo)  # tipo 8 para criar grupo
 
-        cliente.sendall(comando.to_json().encode())
+        #cliente.sendall(comando.to_json().encode())
+        _send_with_len(cliente, comando.to_json().encode())
 
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
@@ -293,7 +308,8 @@ class Cliente:
         usuario = models_app.Usuario(nome=None, login=login, senha=None, ip=None, porta=None)
         comando = models_app.Comando(tipo=9, objeto=usuario)  # tipo 9 para listar grupos
 
-        cliente.sendall(comando.to_json().encode())
+        #cliente.sendall(comando.to_json().encode())
+        _send_with_len(cliente, comando.to_json().encode())
 
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
@@ -309,7 +325,8 @@ class Cliente:
         payload = _file_to_payload(caminho_arquivo)
         msg = models_app.Mensagem(remetente=remetente, destino=destino, tipo="arquivo", conteudo=payload)
         cmd = models_app.Comando(tipo=3, objeto=msg)   # 3 = enviar mensagem (reutilizamos)
-        cliente.sendall(cmd.to_json().encode())
+        #cliente.sendall(cmd.to_json().encode())
+        _send_with_len(cliente, cmd.to_json().encode())
 
         resposta = cliente.recv(65536).decode()
         print("Resposta do servidor:", resposta)

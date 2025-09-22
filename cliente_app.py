@@ -60,34 +60,30 @@ def main():
                 print(f"\n--- {username} — Opções ---")
                 print("1) Listar contatos")
                 print("2) Adicionar contato")
-                print("3) Enviar mensagem")
-                print("4) Listar grupos")
-                print("5) Criar grupo")
-                print("6) Enviar mensagem para grupo")
-                print("7) Logout")
-                print("8) Sair")
+                print("3) Ver mensagens de um contato/grupo")
+                print("4) Enviar mensagem")
+                print("5) Listar grupos")
+                print("6) Criar grupo")
+                print("7) Enviar mensagem para grupo")
+                print("8) Listar todos os usuários cadastrados no servidor")
+                print("9) Logout")
+                print("10) Sair")
                 escolha = input("Escolha: ").strip()
 
                 if escolha == '1':
                     resposta = cliente.listar_contatos(login=username)
+                    if isinstance(resposta, str):
+                        try:
+                            obj = json.loads(resposta)
+                            if isinstance(obj, list):
+                                print("\n--- Contatos ---")
+                                for contato in obj:
+                                    print(f"Nome: {contato.get('nome')}, Login: {contato.get('login')}")
+                            else:
+                                print("Resposta do servidor:", obj)
+                        except Exception:
+                            print("Resposta do servidor:", resposta)
                     print("Resposta do servidor:", resposta)
-
-                    print("\n--- Opções ---")
-                    print("1) Ver mensagens de um contato")
-                    print("2) Voltar")
-
-                    sub_escolha = input("Escolha: ").strip()
-                    if sub_escolha == '1':
-                        contato_login = input("Login do contato: ").strip()
-                        mensagens = cliente.listar_mensagens(conversa_id=contato_login)
-                        if mensagens:
-                            print(f"\n--- Mensagens com {contato_login} ---")
-                            for msg in mensagens:
-                                print(f"[{msg.datetime}] {msg.remetente} -> {msg.destino}: {msg.conteudo}")
-                        else:
-                            print(f"Nenhuma mensagem encontrada com {contato_login}.")
-                    elif sub_escolha == '2':
-                        continue
 
 
                 elif escolha == '2':
@@ -97,33 +93,39 @@ def main():
                     print("Resposta do servidor:", resposta)
 
                 elif escolha == '3':
-                    destino = input("Destino (login do usuário): ").strip()
-                    conteudo = input("Mensagem: ")
-                    resposta = cliente.enviar_mensagem(username,destino, conteudo)
-                    print("Resposta do servidor:", resposta)
+                    conversa_id = input("Login do contato ou ID do grupo: ").strip()
+                    mensagens = cliente.listar_mensagens(conversa_id=conversa_id)
+                    if mensagens:
+                        print(f"\n--- Mensagens com {conversa_id} ---")
+                        for msg in mensagens:
+                            if msg.tipo == 'arquivo':
+                                print(f"[{msg.datetime}] {msg.remetente} -> {msg.destino}: [Arquivo]")
+                            else:
+                                print(f"[{msg.datetime}] {msg.remetente} -> {msg.destino}: {msg.conteudo}")
+                    else:
+                        print(f"Nenhuma mensagem encontrada com {conversa_id}.")
 
                 elif escolha == '4':
+                    tipo_mensagem = input("Deseja enviar um texto ou arquivo? Digite 1 para texto e 2 para arquivo: ").strip()
+                    if tipo_mensagem not in ['1', '2']:
+                        print("Opção inválida.")
+                        continue
+                    destino = input("Destino (login do usuário): ").strip()
+                    if tipo_mensagem == '2':
+                        caminho_arquivo = input("Caminho do arquivo: ").strip()
+                        resposta = cliente.enviar_arquivo(username, destino, caminho_arquivo)
+                        print("Resposta do servidor:", resposta)
+                        continue
+                    else:
+                        conteudo = input("Mensagem: ")
+                        resposta = cliente.enviar_mensagem(username,destino, conteudo)
+                        print("Resposta do servidor:", resposta)
+
+                elif escolha == '5':
                     resposta = cliente.listar_grupos(username)
                     print("Resposta do servidor:", resposta)
 
-                    print("\n--- Opções ---")
-                    print("1) Ver mensagens de um grupo")
-                    print("2) Voltar")
-
-                    sub_escolha = input("Escolha: ").strip()
-                    if sub_escolha == '1':
-                        id_grupo = input("ID DO GRUPO: ").strip()
-                        mensagens = cliente.listar_mensagens(conversa_id=id_grupo)
-                        if mensagens:
-                            print(f"\n--- Mensagens com {id_grupo} ---")
-                            for msg in mensagens:
-                                print(f"[{msg.datetime}] {msg.remetente} -> {msg.destino}: {msg.conteudo}")
-                        else:
-                            print(f"Nenhuma mensagem encontrada com {id_grupo}.")
-                    elif sub_escolha == '2':
-                        continue
-
-                elif escolha == '5':
+                elif escolha == '6':
                     nome_grupo = input("Nome do grupo: ").strip()
                     participantes = input("Participantes (logins separados por vírgula): ").strip().split(',')
                     participantes = [p.strip() for p in participantes if p.strip()]
@@ -132,28 +134,34 @@ def main():
                     resposta = cliente.criar_grupo(nome_grupo, participantes)
                     print("Resposta do servidor:", resposta)
 
-                elif escolha == '6':
+                elif escolha == '7':
                     grupo_id = input("ID do grupo: ").strip()
                     conteudo = input("Mensagem para o grupo: ")
                     resposta = cliente.enviar_mensagem_grupo(username, grupo_id, conteudo)
                     print("Resposta do servidor:", resposta)
 
-                elif escolha == '7':
+                elif escolha == '8':
+                    resposta = cliente.listar_todos_usuarios()
+                    print("Resposta do servidor:", resposta)
+
+                elif escolha == '9':
                     cliente.logout(username)
                     logged = False
                     username = None
                     print("Desconectado.")
 
-                elif escolha == '8':
+                elif escolha == '10':
                     print("Encerrando aplicação.")
                     break
 
                 else:
                     print("Opção inválida.")
     except KeyboardInterrupt:
+        print("keyboard interrupt")
         cliente.logout(username)
         print("\nInterrompido pelo usuário. Encerrando.")
     finally:
+        print("Encerrando aplicação. Finally")
         cliente.logout(username)
         sys.exit(0)
 
