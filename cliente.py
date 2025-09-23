@@ -120,7 +120,9 @@ class Cliente:
                     destino=data.get('destino'),
                     tipo=data.get('tipo'), 
                     datetime_envio=data.get('datetime'),
-                    conteudo=data.get('conteudo') )
+                    conteudo=data.get('conteudo'), 
+                    grupo=data.get('grupo', False))
+                    
                 
                 if (mensagem.tipo == 'texto'):
                     print(f"\nMensagem recebida de {mensagem.remetente}: {mensagem.conteudo}")
@@ -132,14 +134,32 @@ class Cliente:
                 if mensagem.tipo == "arquivo":
                     salvar_arquivo_recebido(mensagem)
 
-                if mensagem.remetente not in [conversa.id for conversa in historico_msgs]:
-                    nova_conversa = models_app.Conversa(id_conversa=mensagem.remetente, mensagens=[mensagem], participantes=[mensagem.remetente, mensagem.destino])
-                    historico_msgs.append(nova_conversa)
-                else:
-                    for conversa in historico_msgs:
-                        if conversa.id == mensagem.remetente:
-                            conversa.mensagens.append(mensagem)
-                            break
+                if mensagem.grupo:
+                    # mensagem para grupo
+                    if mensagem.destino not in [conversa.id for conversa in historico_msgs]:
+                        nova_conversa = models_app.Conversa(id_conversa=mensagem.destino, mensagens=[mensagem], participantes=[mensagem.remetente])
+                        historico_msgs.append(nova_conversa)
+                        print("Nova conversa de grupo criada no histórico.")
+                    else:
+                        for conversa in historico_msgs:
+                            if conversa.id == mensagem.destino:
+                                conversa.mensagens.append(mensagem)
+                                print("Mensagem de grupo adicionada ao histórico existente.")
+                                break
+                else:  
+                    # mensagem direta          
+                    if mensagem.remetente not in [conversa.id for conversa in historico_msgs]:
+                        nova_conversa = models_app.Conversa(id_conversa=mensagem.remetente, mensagens=[mensagem], participantes=[mensagem.remetente, mensagem.destino])
+                        historico_msgs.append(nova_conversa)
+                        print("Nova conversa criada no histórico.")
+                        print(nova_conversa.to_dict())
+                    else:
+                        for conversa in historico_msgs:
+                            if conversa.id == mensagem.remetente:
+                                conversa.mensagens.append(mensagem)
+                                print("Mensagem adicionada ao histórico existente.")
+                                print(conversa.to_dict())
+                                break
                 
 # métodos para enviar comandos ao servidor 
 # cada método cria o comando, conecta ao servidor, envia o comando e espera a resposta
@@ -244,13 +264,36 @@ class Cliente:
         cliente.connect((self.server, self.port))
 
         mensagem = models_app.Mensagem(remetente = remetente, destino=grupo_id, tipo=tipo, conteudo=conteudo, grupo=True)
-        comando = models_app.Comando(tipo=10, objeto=mensagem)  # tipo 10 para enviar mensagem para grupo
+        comando = models_app.Comando(tipo=9, objeto=mensagem)  # tipo 9 para enviar mensagem para grupo
 
         #cliente.sendall(comando.to_json().encode())
         _send_with_len(cliente, comando.to_json().encode())
 
         resposta = cliente.recv(4096).decode()
         print('Resposta do servidor:', resposta)
+
+        status_ok = False
+        try:
+            resp = json.loads(resposta)
+            status_ok = (resp.get('status') == 'success')
+        except Exception:
+            # não era JSON, deixa como string mesmo
+            print("Resposta do servidor não é JSON:", resposta)
+
+        if status_ok:
+            # adiciona a mensagem ao histórico local se o envio foi bem-sucedido
+            if grupo_id not in [conversa.id for conversa in historico_msgs]:
+                nova_conversa = models_app.Conversa(id_conversa=grupo_id, mensagens=[mensagem], participantes=[remetente, grupo_id])
+                historico_msgs.append(nova_conversa)
+                print("Nova conversa criada no histórico.")
+                print(nova_conversa.to_dict())
+            else:
+                for conversa in historico_msgs:
+                    if conversa.id == grupo_id:
+                        conversa.mensagens.append(mensagem)
+                        print("Mensagem adicionada ao histórico existente.")
+                        print(conversa.to_dict())
+                        break
 
         cliente.close()
         return resposta
@@ -341,7 +384,7 @@ class Cliente:
         cliente.connect((self.server, self.port))
 
         usuario = models_app.Usuario(nome=None, login=login, senha=None, ip=None, porta=None)
-        comando = models_app.Comando(tipo=9, objeto=usuario)  # tipo 9 para listar grupos
+        comando = models_app.Comando(tipo=10, objeto=usuario)  # tipo 10 para listar grupos
 
         #cliente.sendall(comando.to_json().encode())
         _send_with_len(cliente, comando.to_json().encode())

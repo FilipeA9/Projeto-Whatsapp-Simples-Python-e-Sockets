@@ -293,7 +293,7 @@ def criar_grupo(conn, addr, dados_grupo):
     Handler para comando tipo 8: criar grupo
     dados_grupo é um dict com os dados do grupo a ser criado
     """
-    id_ = grupos_cadastrados[-1].id + 1 if grupos_cadastrados else 1  # simples auto-incremento
+    id_ = str(grupos_cadastrados[-1].id + 1 if grupos_cadastrados else 1) # simples auto-incremento
 
     try:
         grupo = models_app.Grupo(
@@ -307,7 +307,27 @@ def criar_grupo(conn, addr, dados_grupo):
         return {'status': 'success', 'message': 'Grupo criado'}
     except Exception as e:
         return {'status': 'error', 'error': 'exception', 'detail': str(e)}
+
+def listar_grupos(conn, addr, usuario):
+    usuario_login = usuario.get('login')
+    """
+    Handler para comando tipo 10: listar todos os grupos
+    """
+    try:
+        grupos_info = []
+        for grupo in grupos_cadastrados:
+            if usuario_login in grupo.participantes:
+                grupos_info.append({
+                    'id': grupo.id,
+                    'nome': grupo.nome,
+                    'participantes': grupo.participantes,
+                    'conversa_id': grupo.conversa
+                })
+        return {'status': 'success', 'grupos': grupos_info}
+    except Exception as e:
+        return {'status': 'error', 'error': 'exception', 'detail': str(e)}
     
+
 # mapa de exemplo: associe tipos de comando aos handlers implementados
 # Ex: 1 -> cadastrar_cliente
 COMMAND_HANDLERS = {
@@ -319,7 +339,8 @@ COMMAND_HANDLERS = {
     6: listar_todos_usuarios,
     7: logout_cliente,
     8: criar_grupo,
-    9: enviar_mensagem_grupo
+    9: enviar_mensagem_grupo,
+    10: listar_grupos
 }
 
 # Cria um socket TCP/IP
