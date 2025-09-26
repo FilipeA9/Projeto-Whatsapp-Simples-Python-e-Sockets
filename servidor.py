@@ -11,6 +11,9 @@ PORT = 8080        # Porta que o servidor vai escutar
 clientes_cadastrados = []
 grupos_cadastrados = []
 
+# Lock global para proteger variáveis compartilhadas
+lock = threading.Lock()
+
 def _recv_exact(conn, n):
     buf = bytearray()
     while len(buf) < n:
@@ -78,7 +81,12 @@ def handle_client(conn, addr):
             # - envie resposta diretamente via conn OU
             # - retorne um objeto (dict/list/str) que será enviado aqui
             try:
-                result = handler(conn, addr, objeto)
+                if tipo in [1, 4, 6, 8, 10]:  # exemplos de tipos que modificam clientes/historico
+                    with lock:
+                        result = handler(conn, addr, objeto)
+                else:
+                    # outros tipos podem não precisar de lock
+                    result = handler(conn, addr, objeto)
                 if result is None:
                     # assume handler já enviou resposta quando necessário
                     return
