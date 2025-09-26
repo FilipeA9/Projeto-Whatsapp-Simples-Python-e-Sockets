@@ -5,6 +5,7 @@ import mimetypes, os, hashlib
 import re
 from pathlib import Path
 from base64 import b64decode, b64encode
+from connection import Connection
 import models_app
 
 historico_msgs = []  # lista de objetos Conversa
@@ -152,13 +153,13 @@ class Cliente:
                         nova_conversa = models_app.Conversa(id_conversa=mensagem.remetente, mensagens=[mensagem], participantes=[mensagem.remetente, mensagem.destino])
                         historico_msgs.append(nova_conversa)
                         print("Nova conversa criada no histórico.")
-                        print(nova_conversa.to_dict())
+                        # print(nova_conversa.to_dict())
                     else:
                         for conversa in historico_msgs:
                             if conversa.id == mensagem.remetente:
                                 conversa.mensagens.append(mensagem)
                                 print("Mensagem adicionada ao histórico existente.")
-                                print(conversa.to_dict())
+                                # print(conversa.to_dict())
                                 break
                 
 # métodos para enviar comandos ao servidor 
@@ -169,108 +170,98 @@ class Cliente:
     # envia o IP e porta do cliente para que o servidor possa se conectar
     # assim o cliente pode receber mensagens indenpendente do ip/porta do servidor                      
     def login(self,login, senha,):
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            usuario = models_app.Usuario( nome=None, login=login, senha=senha, ip=self.listen_ip, porta=self.listen_port)
+            comando = models_app.Comando(tipo=2, objeto = usuario) # tipo 2 para login
+            
+            #cliente.sendall(comando.to_json().encode())
+            _send_with_len(cliente, comando.to_json().encode())
+            
+            resposta = cliente.recv(4096).decode()
+            #print('Resposta do servidor:', resposta)
 
-        usuario = models_app.Usuario( nome=None, login=login, senha=senha, ip=self.listen_ip, porta=self.listen_port)
-        comando = models_app.Comando(tipo=2, objeto = usuario) # tipo 2 para login
-          
-        #cliente.sendall(comando.to_json().encode())
-        _send_with_len(cliente, comando.to_json().encode())
-        
-        resposta = cliente.recv(4096).decode()
-        print('Resposta do servidor:', resposta)
-
-        cliente.close()
-        return resposta
+            # cliente.close()
+            return resposta
     
     # método de logout, recebe o login do usuário e envia ao servidor
     # o servidor coloca o status do usuário como offline
     def logout(self, login):
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            usuario = models_app.Usuario( nome=None, login=login, senha=None, ip=None, porta=None)
+            comando = models_app.Comando(tipo=7, objeto = usuario) # tipo 7 para logout
+                
+            #cliente.sendall(comando.to_json().encode())
+            _send_with_len(cliente, comando.to_json().encode())
+            
+            resposta = cliente.recv(4096).decode()
+            #print('Resposta do servidor:', resposta)
 
-        usuario = models_app.Usuario( nome=None, login=login, senha=None, ip=None, porta=None)
-        comando = models_app.Comando(tipo=7, objeto = usuario) # tipo 7 para logout
-          
-        #cliente.sendall(comando.to_json().encode())
-        _send_with_len(cliente, comando.to_json().encode())
-        
-        resposta = cliente.recv(4096).decode()
-        print('Resposta do servidor:', resposta)
-
-        cliente.close()
-        return resposta
+            # cliente.close()
+            return resposta
     
 # método de registro, recebe nome, login e senha e envia ao servidor
 # o servidor cria o usuário e retorna uma mensagem de sucesso ou erro
     def registrar(self, nome, login, senha):
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            usuario = models_app.Usuario(nome=nome, login=login, senha=senha, ip=self.listen_ip, porta=self.listen_port)
+            comando = models_app.Comando(tipo=1, objeto = usuario) # tipo 1 para registro
 
-        usuario = models_app.Usuario(nome=nome, login=login, senha=senha, ip=self.listen_ip, porta=self.listen_port)
-        comando = models_app.Comando(tipo=1, objeto = usuario) # tipo 1 para registro
+            #cliente.sendall(comando.to_json().encode())
+            _send_with_len(cliente, comando.to_json().encode())
 
-        #cliente.sendall(comando.to_json().encode())
-        _send_with_len(cliente, comando.to_json().encode())
+            resposta = cliente.recv(4096).decode()
+            #print('Resposta do servidor:', resposta)
 
-        resposta = cliente.recv(4096).decode()
-        print('Resposta do servidor:', resposta)
-
-        cliente.close()
-        return resposta
+            # cliente.close()
+            return resposta
 
     # método para enviar mensagem, recebe remetente, destino, conteudo e tipo (texto ou arquivo)
     def enviar_mensagem(self, remetente, destino, conteudo, tipo='texto'):
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            mensagem = models_app.Mensagem(remetente = remetente, destino=destino, tipo=tipo, conteudo=conteudo)
+            comando = models_app.Comando(tipo=3, objeto=mensagem)  # tipo 3 para enviar mensagem
 
-        mensagem = models_app.Mensagem(remetente = remetente, destino=destino, tipo=tipo, conteudo=conteudo)
-        comando = models_app.Comando(tipo=3, objeto=mensagem)  # tipo 3 para enviar mensagem
+            #cliente.sendall(comando.to_json().encode())
+            _send_with_len(cliente, comando.to_json().encode())
 
-        #cliente.sendall(comando.to_json().encode())
-        _send_with_len(cliente, comando.to_json().encode())
+            resposta = cliente.recv(4096).decode()
+            #print('Resposta do servidor:', resposta)
 
-        resposta = cliente.recv(4096).decode()
-        print('Resposta do servidor:', resposta)
+            status_ok = False
+            try:
+                resp = json.loads(resposta)
+                status_ok = (resp.get('status') == 'success')
+            except Exception:
+                # não era JSON, deixa como string mesmo
+                print("Resposta do servidor não é JSON:", resposta)
 
-        status_ok = False
-        try:
-            resp = json.loads(resposta)
-            status_ok = (resp.get('status') == 'success')
-        except Exception:
-            # não era JSON, deixa como string mesmo
-            print("Resposta do servidor não é JSON:", resposta)
+            if status_ok:
+                # adiciona a mensagem ao histórico local se o envio foi bem-sucedido
+                if destino not in [conversa.id for conversa in historico_msgs]:
+                    nova_conversa = models_app.Conversa(id_conversa=destino, mensagens=[mensagem], participantes=[remetente, destino])
+                    historico_msgs.append(nova_conversa)
+                    print("Nova conversa criada no histórico.")
+                else:
+                    for conversa in historico_msgs:
+                        if conversa.id == destino:
+                            conversa.mensagens.append(mensagem)
+                            print("Mensagem adicionada ao histórico existente.")
+                            break
 
-        if status_ok:
-            # adiciona a mensagem ao histórico local se o envio foi bem-sucedido
-            if destino not in [conversa.id for conversa in historico_msgs]:
-                nova_conversa = models_app.Conversa(id_conversa=destino, mensagens=[mensagem], participantes=[remetente, destino])
-                historico_msgs.append(nova_conversa)
-                print("Nova conversa criada no histórico.")
-            else:
-                for conversa in historico_msgs:
-                    if conversa.id == destino:
-                        conversa.mensagens.append(mensagem)
-                        print("Mensagem adicionada ao histórico existente.")
-                        break
-
-        cliente.close()
-        return resposta
+            # cliente.close()
+            return resposta
     
     # método para enviar mensagem para um grupo, recebe remetente, id do grupo, conteudo e tipo (texto ou arquivo)
     def enviar_mensagem_grupo(self, remetente, grupo_id, conteudo, tipo='texto'):
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            mensagem = models_app.Mensagem(remetente = remetente, destino=grupo_id, tipo=tipo, conteudo=conteudo, grupo=True)
+            comando = models_app.Comando(tipo=9, objeto=mensagem)  # tipo 9 para enviar mensagem para grupo
 
-        mensagem = models_app.Mensagem(remetente = remetente, destino=grupo_id, tipo=tipo, conteudo=conteudo, grupo=True)
-        comando = models_app.Comando(tipo=9, objeto=mensagem)  # tipo 9 para enviar mensagem para grupo
+            #cliente.sendall(comando.to_json().encode())
+            _send_with_len(cliente, comando.to_json().encode())
 
-        #cliente.sendall(comando.to_json().encode())
-        _send_with_len(cliente, comando.to_json().encode())
-
-        resposta = cliente.recv(4096).decode()
-        print('Resposta do servidor:', resposta)
+            resposta = cliente.recv(4096).decode()
+            #print('Resposta do servidor:', resposta)
 
         status_ok = False
         try:
@@ -286,71 +277,65 @@ class Cliente:
                 nova_conversa = models_app.Conversa(id_conversa=grupo_id, mensagens=[mensagem], participantes=[remetente, grupo_id])
                 historico_msgs.append(nova_conversa)
                 print("Nova conversa criada no histórico.")
-                print(nova_conversa.to_dict())
+                # print(nova_conversa.to_dict())
             else:
                 for conversa in historico_msgs:
                     if conversa.id == grupo_id:
                         conversa.mensagens.append(mensagem)
                         print("Mensagem adicionada ao histórico existente.")
-                        print(conversa.to_dict())
+                        # print(conversa.to_dict())
                         break
 
-        cliente.close()
+        #cliente.close()
         return resposta
     
     # método para adicionar contato, recebe o login do usuário, nome do contato e login do dono do contato
     def adicionar_contato(self, contato_login, contato_nome, contato_dono):
         if contato_login == contato_dono:
             return "Erro: Não é possível adicionar você mesmo como contato."
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            contato = models_app.Contato(nome=contato_nome, id_usuario=contato_login, contato_dono=contato_dono)
+            comando = models_app.Comando(tipo=4, objeto=contato)  # tipo 4 para adicionar contato
 
-        contato = models_app.Contato(nome=contato_nome, id_usuario=contato_login, contato_dono=contato_dono)
-        comando = models_app.Comando(tipo=4, objeto=contato)  # tipo 4 para adicionar contato
+            #cliente.sendall(comando.to_json().encode())
+            _send_with_len(cliente, comando.to_json().encode())
 
-        #cliente.sendall(comando.to_json().encode())
-        _send_with_len(cliente, comando.to_json().encode())
+            resposta = cliente.recv(4096).decode()
+            #print('Resposta do servidor:', resposta)
 
-        resposta = cliente.recv(4096).decode()
-        print('Resposta do servidor:', resposta)
-
-        cliente.close()
-        return resposta
+            # cliente.close()
+            return resposta
 
     # método para listar contatos, recebe o login do usuário e envia ao servidor
     # o servidor retorna a lista de contatos do usuário
     def listar_contatos(self, login):
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            usuario = models_app.Usuario(nome=None, login=login, senha=None, ip=None, porta=None)
+            comando = models_app.Comando(tipo=5, objeto=usuario)  # tipo 5 para listar contatos
 
-        usuario = models_app.Usuario(nome=None, login=login, senha=None, ip=None, porta=None)
-        comando = models_app.Comando(tipo=5, objeto=usuario)  # tipo 5 para listar contatos
+            #cliente.sendall(comando.to_json().encode())
+            _send_with_len(cliente, comando.to_json().encode())
 
-        #cliente.sendall(comando.to_json().encode())
-        _send_with_len(cliente, comando.to_json().encode())
+            resposta = cliente.recv(4096).decode()
+            #print('Resposta do servidor:', resposta)
 
-        resposta = cliente.recv(4096).decode()
-        print('Resposta do servidor:', resposta)
-
-        cliente.close()
-        return resposta
+            # cliente.close()
+            return resposta
     
     # método para listar todos os usuários, envia ao servidor
     # o servidor retorna a lista de todos os usuários cadastrados
     def listar_todos_usuarios(self):
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            comando = models_app.Comando(tipo=6, objeto=None)  # tipo 6 para listar todos os usuários
 
-        comando = models_app.Comando(tipo=6, objeto=None)  # tipo 6 para listar todos os usuários
+            #cliente.sendall(comando.to_json().encode())
+            _send_with_len(cliente, comando.to_json().encode())
 
-        #cliente.sendall(comando.to_json().encode())
-        _send_with_len(cliente, comando.to_json().encode())
+            resposta = cliente.recv(4096).decode()
+            #print('Resposta do servidor:', resposta)
 
-        resposta = cliente.recv(4096).decode()
-        print('Resposta do servidor:', resposta)
-
-        cliente.close()
-        return resposta
+            # cliente.close()
+            return resposta
     
     def listar_mensagens(self, conversa_id):
         for conversa in historico_msgs:
@@ -362,54 +347,48 @@ class Cliente:
 
     # método para criar grupo, recebe nome do grupo e lista de participantes (logins)
     def criar_grupo(self, nome_grupo, participantes):
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            grupo = models_app.Grupo(id_grupo=nome_grupo, nome=nome_grupo, participantes=participantes)
+            comando = models_app.Comando(tipo=8, objeto=grupo)  # tipo 8 para criar grupo
 
-        grupo = models_app.Grupo(id_grupo=nome_grupo, nome=nome_grupo, participantes=participantes)
-        comando = models_app.Comando(tipo=8, objeto=grupo)  # tipo 8 para criar grupo
+            #cliente.sendall(comando.to_json().encode())
+            _send_with_len(cliente, comando.to_json().encode())
 
-        #cliente.sendall(comando.to_json().encode())
-        _send_with_len(cliente, comando.to_json().encode())
+            resposta = cliente.recv(4096).decode()
+            #print('Resposta do servidor:', resposta)
 
-        resposta = cliente.recv(4096).decode()
-        print('Resposta do servidor:', resposta)
-
-        cliente.close()
-        return resposta
+            # cliente.close()
+            return resposta
     
     # método para listar grupos, recebe o login do usuário e envia ao servidor
     # o servidor retorna a lista de grupos do usuário
     def listar_grupos(self, login):
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            usuario = models_app.Usuario(nome=None, login=login, senha=None, ip=None, porta=None)
+            comando = models_app.Comando(tipo=10, objeto=usuario)  # tipo 10 para listar grupos
 
-        usuario = models_app.Usuario(nome=None, login=login, senha=None, ip=None, porta=None)
-        comando = models_app.Comando(tipo=10, objeto=usuario)  # tipo 10 para listar grupos
+            #cliente.sendall(comando.to_json().encode())
+            _send_with_len(cliente, comando.to_json().encode())
 
-        #cliente.sendall(comando.to_json().encode())
-        _send_with_len(cliente, comando.to_json().encode())
+            resposta = cliente.recv(4096).decode()
+            #print('Resposta do servidor:', resposta)
 
-        resposta = cliente.recv(4096).decode()
-        print('Resposta do servidor:', resposta)
-
-        cliente.close()
-        return resposta
+            # cliente.close()
+            return resposta
 
     # método para enviar arquivo, recebe remetente, destino e caminho do arquivo
     def enviar_arquivo(self, remetente: str, destino: str, caminho_arquivo: str):
-        cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente.connect((self.server, self.port))
+        with Connection(self.server, self.port) as cliente:
+            payload = _file_to_payload(caminho_arquivo)
+            msg = models_app.Mensagem(remetente=remetente, destino=destino, tipo="arquivo", conteudo=payload)
+            cmd = models_app.Comando(tipo=3, objeto=msg)   # 3 = enviar mensagem (reutilizamos)
+            #cliente.sendall(cmd.to_json().encode())
+            _send_with_len(cliente, cmd.to_json().encode())
 
-        payload = _file_to_payload(caminho_arquivo)
-        msg = models_app.Mensagem(remetente=remetente, destino=destino, tipo="arquivo", conteudo=payload)
-        cmd = models_app.Comando(tipo=3, objeto=msg)   # 3 = enviar mensagem (reutilizamos)
-        #cliente.sendall(cmd.to_json().encode())
-        _send_with_len(cliente, cmd.to_json().encode())
-
-        resposta = cliente.recv(65536).decode()
-        print("Resposta do servidor:", resposta)
-        cliente.close()
-        return resposta
+            resposta = cliente.recv(65536).decode()
+            #print('Resposta do servidor:', resposta)
+            # cliente.close()
+            return resposta
 
 
                  

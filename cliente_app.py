@@ -83,7 +83,8 @@ def main():
                                 print("Resposta do servidor:", obj)
                         except Exception:
                             print("Resposta do servidor:", resposta)
-                    print("Resposta do servidor:", resposta)
+                    else:
+                        print("Resposta do servidor:", resposta)
 
 
                 elif escolha == '2':

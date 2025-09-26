@@ -198,7 +198,7 @@ def enviar_mensagem_handler(conn, addr, dados_msg):
 
         # Aqui você pode implementar a lógica para encaminhar a mensagem ao destinatário
         # Por simplicidade, apenas confirmamos o recebimento
-        return {'status': 'success', 'message': 'Mensagem recebida'}
+        return {'status': 'success', 'message': 'Mensagem enviada'}
     except Exception as e:
         return {'status': 'error', 'error': 'exception', 'detail': str(e)}
     
@@ -252,14 +252,24 @@ def adicionar_contato(conn, addr, contato_dados):
             id_usuario=contato_dados.get('id'),
             contato_dono=contato_dados.get('contato_dono')
         )
+
+        contato_existe = False
+
+        # contato que vai ser adicionado
         for cliente in clientes_cadastrados:
-            if cliente.login == contato.contato_dono:
-                cliente.contatos.append(contato)
-                break
-        # Aqui você pode implementar a lógica para adicionar o contato ao usuário
-        # Por simplicidade, apenas confirmamos o recebimento
-        print(f"Contato a ser adicionado: {contato.nome} ({contato.id}) para cliente {cliente.login}")
-        return {'status': 'success', 'message': 'Contato adicionado'}
+            if cliente.login == contato.nome:
+                contato_existe = True
+        
+        # contato (dono)
+        if contato_existe:
+            for cliente in clientes_cadastrados:
+                if cliente.login == contato.contato_dono:
+                    cliente.contatos.append(contato)
+                    print(f"Contato adicionado: {contato.nome} ({contato.id}) para cliente {cliente.login}")
+                    return {'status': 'success', 'message': 'Contato adicionado'}
+        
+        # se não achou o dono
+        return {'status': 'success', 'message': f'O usuário "{contato.nome}" não foi encontrado(a)'}
     except Exception as e:
         return {'status': 'error', 'error': 'exception', 'detail': str(e)}
 
