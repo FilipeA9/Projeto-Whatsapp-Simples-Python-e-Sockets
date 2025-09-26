@@ -265,7 +265,7 @@ def adicionar_contato(conn, addr, contato_dados):
 
         # contato que vai ser adicionado
         for cliente in clientes_cadastrados:
-            if cliente.login == contato.nome:
+            if cliente.login == contato.id:
                 contato_existe = True
         
         # contato (dono)
